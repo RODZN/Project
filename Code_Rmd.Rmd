@@ -184,7 +184,7 @@ plot(graph,
 
 ### Degree centrality and being a colonizer
 
-Now we will see if being a colonizer is correlated with having high degree centrality.
+Now we will see if a colonizer node will have a high degree centrality.
 
 Degree centrality is defined by the number of neighbors of a node.
 
@@ -195,7 +195,6 @@ df_degree <- data.frame(is_colonizer = V(graph)$is_colonizer,
                  degree = c_degree)
 ggplot(df_degree, aes(x = degree, y = is_colonizer)) +
   geom_point() +
-  geom_smooth(method = "lm", se = FALSE)+
   theme_minimal()+
   ggtitle("Degree Centrality vs. being a colonizer")
 ```
@@ -206,21 +205,89 @@ That was expected since a colonized country have many economic, financial, and p
 
 ## Finding communities
 
-Being in the case of a directed graph, supposing also that a country with many trade edges has thus a powerful currency, and so powerful countries should attract a lot of less powerful countries to them. To find these clusters of powerful currency countries, countries with low money power and maybe a third class of in-between countries, we will use multiple clustering methods, and compare their results to choose the best number of communities.
+Being in the case of a directed graph, supposing also that a country with many trade edges has thus a powerful currency, and so powerful countries should attract a lot of less powerful countries to them. We expect to find clusters of:
+
+1.  powerful currency countries
+
+2.  countries with low money power
+
+3.  and maybe a third class of in-between countries
+
+Our graph is both directed and weighted, with both weights and directions being very important.
+
+Since in R there is no methods implemented to take into account both weights and directions together to detect communities, we will find clusters with the undirected version of our graph, thus losing important information, to try using multiple clustering methods as the ones learned in the course, and compare their results to choose the best number of communities.
+
+We will use the Greedy, Louvain and Leiden clustering algorithms to detect communities here, which only work on undirected graphs.
 
 ```{r}
+#We start by making the graph undirected
 graph_net <- as.undirected(graph, mode = "mutual")
+
+#Then we apply community detection algorithms
 graph_greedy <- cluster_fast_greedy(graph_net, weights = E(graph_net)$weight)
 graph_louvain <- cluster_louvain(graph_net, weights = E(graph_net)$weight)
 graph_leiden <- cluster_leiden(graph_net, objective_function = "modularity",weights = E(graph_net)$weight)
-graph_edgebetween <- cluster_infomap(graph,weights = E(graph)$weight)
 
-graph_modularity_res <- data.frame(Algorithm = "Shortest paths", Modularity = modularity(graph,graph_spectral),
-                                    Nb_clusters = max(graph_spectral))
-graph_modularity_res <- rbind(graph_modularity_res, c("Spectral", modularity(graph_net,graph_spectral), max(graph_spectral)))
-graph_modularity_res <- rbind(graph_modularity_res, c("Greedy", modularity(graph_greedy), max(graph_greedy$membership)))
+#We store them in a dataframe to compare them
+graph_modularity_res <- data.frame(Algorithm = "Greedy", Modularity = modularity(graph_greedy),Nb_clusters = max(graph_greedy$membership))
 graph_modularity_res <- rbind(graph_modularity_res, c("Louvain", modularity(graph_louvain), max(graph_louvain$membership)))
 graph_modularity_res <- rbind(graph_modularity_res, c("Leiden", graph_leiden$quality, max(graph_leiden$membership)))
-graph_modularity_res <- rbind(graph_modularity_res, c("Edge betweenness", modularity(graph_edgebetween), max(graph_edgebetween$membership)))
 graph_modularity_res
+```
+
+Having the same modularity index, let us check how similar those communities are. To do so, we will calculate the Rand Index of similarity for each pair.
+
+```{r}
+rand_index <- function(clustering1, clustering2) {
+  n <- length(clustering1)
+  # Compute the number of agreements and disagreements
+  agree <- 0
+  disagree <- 0
+  
+  for (i in 1:(n - 1)) {
+    for (j in (i + 1):n) {
+      if ((clustering1[i] == clustering1[j] && clustering2[i] == clustering2[j]) ||
+          (clustering1[i] != clustering1[j] && clustering2[i] != clustering2[j])) {
+        agree <- agree + 1
+      } else {
+        disagree <- disagree + 1
+      }
+    }
+  }
+  
+  # Calculate the Rand Index
+  rand_index <- agree / (agree + disagree)
+  
+  return(rand_index)
+}
+```
+
+```{r}
+cat("Greedy-Louvain",rand_index(graph_greedy$membership,graph_louvain$membership))
+cat("\n Greedy-Leiden",rand_index(graph_greedy$membership,graph_leiden$membership))
+cat("\n Louvain-Leiden",rand_index(graph_louvain$membership,graph_leiden$membership))
+```
+
+Those algorithms are very similar. So we will choose one of them, the Greedy, and we will visualize the communities.
+
+```{r}
+plot(graph, 
+     vertex.size=3, 
+     vertex.label.cex=0.8, 
+     vertex.color=graph_greedy$membership,  
+     vertex.label.color=graph_greedy$membership,
+     main=paste("Louvain approach\n(Modularity =", round(modularity(graph_greedy), digits=2),"| Clusters =",max(graph_greedy$membership),")"),
+     edge.color = rgb(0,0,0,.25))
+```
+
+```{r}
+plot(graph,
+    mark.groups = graph_greedy,
+    vertex.size=3,
+    vertex.label.cex=0.4,
+    vertex.color=graph_greedy$membership,
+    vertex.label.color="black",
+    vertex.label.dist=1,
+    main=paste("Louvain approach\n(Modularity =", round(modularity(graph_greedy), digits=2),"| Clusters =",max(graph_greedy$membership),")"),
+    edge.color = rgb(0,0,0,.25))
 ```
