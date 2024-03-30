@@ -5,9 +5,9 @@ author:
 - "NENOVSKY Nikola"
 date: "2024-03-28"
 output: 
-  pdf_document:
-    toc: yes
   html_document:
+    toc: yes
+  pdf_document:
     toc: yes
 ---
 
@@ -213,81 +213,41 @@ Being in the case of a directed graph, supposing also that a country with many t
 
 3.  and maybe a third class of in-between countries
 
-Our graph is both directed and weighted, with both weights and directions being very important.
+We will use spectral clustering taking into account weights associated to each edge. Let us first calculate the Laplacian matrix Normalised and plot the eigenvalues. The Laplacian is an alternative matrix representation of the graph (vertex similarity).
 
-Since in R there is no methods implemented to take into account both weights and directions together to detect communities, we will find clusters with the undirected version of our graph, thus losing important information, to try using multiple clustering methods as the ones learned in the course, and compare their results to choose the best number of communities.
+$𝐿=𝐷−𝐴$
 
-We will use the Greedy, Louvain and Leiden clustering algorithms to detect communities here, which only work on undirected graphs.
+with 𝐴 the adjacency matrix, and 𝐷 a diagonal matrix storing degrees. We will here use the weighted degrees for the calculation of the Laplacian matrix.
 
-```{r}
-#We start by making the graph undirected
-graph_net <- as.undirected(graph, mode = "mutual")
+Here we will also use the Laplacian matrix:
 
-#Then we apply community detection algorithms
-graph_greedy <- cluster_fast_greedy(graph_net, weights = E(graph_net)$weight)
-graph_louvain <- cluster_louvain(graph_net, weights = E(graph_net)$weight)
-graph_leiden <- cluster_leiden(graph_net, objective_function = "modularity",weights = E(graph_net)$weight)
-
-#We store them in a dataframe to compare them
-graph_modularity_res <- data.frame(Algorithm = "Greedy", Modularity = modularity(graph_greedy),Nb_clusters = max(graph_greedy$membership))
-graph_modularity_res <- rbind(graph_modularity_res, c("Louvain", modularity(graph_louvain), max(graph_louvain$membership)))
-graph_modularity_res <- rbind(graph_modularity_res, c("Leiden", graph_leiden$quality, max(graph_leiden$membership)))
-graph_modularity_res
-```
-
-Having the same modularity index, let us check how similar those communities are. To do so, we will calculate the Rand Index of similarity for each pair.
+$𝐿_𝑁 = 𝐼 - 𝐷^{−1/2} 𝐴 𝐷^{1/2}$
 
 ```{r}
-rand_index <- function(clustering1, clustering2) {
-  n <- length(clustering1)
-  # Compute the number of agreements and disagreements
-  agree <- 0
-  disagree <- 0
-  
-  for (i in 1:(n - 1)) {
-    for (j in (i + 1):n) {
-      if ((clustering1[i] == clustering1[j] && clustering2[i] == clustering2[j]) ||
-          (clustering1[i] != clustering1[j] && clustering2[i] != clustering2[j])) {
-        agree <- agree + 1
-      } else {
-        disagree <- disagree + 1
-      }
-    }
-  }
-  
-  # Calculate the Rand Index
-  rand_index <- agree / (agree + disagree)
-  
-  return(rand_index)
-}
+graph_L <- laplacian_matrix(graph, normalized = T, sparse = F, weights = E(graph)$weight)
+ggplot(as_tibble(eigen(graph_L)$values)) +
+  geom_point(aes(x=1:length(value),y=sort(value))) +
+  labs(x="", y="Eigenvalue", title = "Eigenvalues of L_N")
 ```
 
-```{r}
-cat("Greedy-Louvain",rand_index(graph_greedy$membership,graph_louvain$membership))
-cat("\n Greedy-Leiden",rand_index(graph_greedy$membership,graph_leiden$membership))
-cat("\n Louvain-Leiden",rand_index(graph_louvain$membership,graph_leiden$membership))
-```
+The normalized version of the Laplacian appears to show an eigengap at position 2-3, which would suggest a clustering with K=2 or 3 communities. we will plot both of them and compare them to check whether one of them is more adequate.
 
-Those algorithms are very similar. So we will choose one of them, the Greedy, and we will visualize the communities.
+We select the last K eigenvectors of the Laplacian (associated to the smallest K eigenvalues) and cluster them using the k-means clustering. For k-means, we use the k-means++ algorithm, which was shown to provide more robust results with respect to the initial values.
+
+In our case, we select K=3, thus being in concordance with our expectations.
+
+```{r, echo = TRUE, message = FALSE, eval = TRUE}
+K = 3
+vect_clust <- eigen(graph_L)$vectors
+vect_clust <- vect_clust[,ncol(vect_clust)-0:(K-1)]
+graph_spectral <- kmeans(vect_clust, centers=K)$cluster
+```
 
 ```{r}
 plot(graph, 
      vertex.size=3, 
      vertex.label.cex=0.8, 
-     vertex.color=graph_greedy$membership,  
-     vertex.label.color=graph_greedy$membership,
-     main=paste("Louvain approach\n(Modularity =", round(modularity(graph_greedy), digits=2),"| Clusters =",max(graph_greedy$membership),")"),
+     vertex.color=graph_spectral,  
+     vertex.label.color=graph_spectral,
      edge.color = rgb(0,0,0,.25))
-```
-
-```{r}
-plot(graph,
-    mark.groups = graph_greedy,
-    vertex.size=3,
-    vertex.label.cex=0.4,
-    vertex.color=graph_greedy$membership,
-    vertex.label.color="black",
-    vertex.label.dist=1,
-    main=paste("Louvain approach\n(Modularity =", round(modularity(graph_greedy), digits=2),"| Clusters =",max(graph_greedy$membership),")"),
-    edge.color = rgb(0,0,0,.25))
 ```
