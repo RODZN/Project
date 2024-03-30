@@ -6,6 +6,10 @@ library(RColorBrewer)
 library(dplyr)
 library(ggplot2)
 
+###################################
+# Data importation and first plot #
+###################################
+
 #Import the Data
 currencies_data <- read.delim("flandreau_jobst_internationalcurrencies_data.txt", skip = 9)
 
@@ -25,6 +29,8 @@ E(graph)$weight <- graph_data$bitrade
 graph$layout <- layout_nicely(graph)
 
 par(mfrow=c(1,1), mar=rep(0,4))
+
+# Graph plot
 plot(
   graph,
   vertex.size = 3,
@@ -38,7 +44,33 @@ plot(
   edge.color = as.character(graph_data$category)
 )
 
-#Centralities
+# As we can see, the total trade is higher in the center of the graph (blue and red edges), 
+# which shows that there is a group of central countries which have a big number of connections 
+# with a high trade velue, while being the central home of the currency implied in the trade.
+
+################
+# Centralities #
+################
+
+# We will compute eigen vector centrality. 
+# For eigen vector centrality, the importance of a node depends on the importance of its neighbors
+#
+# Let's compute it for all nodes, then we check its correlation with the two variables 
+# rgdp (log 1900 real gdp) and gold (1 if country_A has a currency convertible in gold in
+# 1900 and 0 otherwise.)
+#
+# We expect there to be a correlation between rgdp and eigenvector centrality:
+# Indeed, economically stronger countries often have more resources to invest in infrastructure, 
+# technology and international relations, which can lead to greater connectivity and influence 
+# across the world. This may be due to their location and their influential system.
+#
+# Also, we expect eigen centrality to be linked to convertability in gold.
+# This is because in the 1900s, particularly during the late 19th and early 20th 
+# centuries, the gold standard was indeed a prevalent monetary system in many
+# parts of the world. So for trading purposes, talking in gold can be sometimes easier,
+# to have a clearer vision on the value of the goods traded, and so trade negotiation could be 
+# more successful between gold convertible money countries.
+
 c_eigen  <- eigen_centrality(graph, directed = T, weights = E(graph)$weight)$vector
 
 df <- data.frame(rgdp = V(graph)$rgdp,
@@ -48,14 +80,28 @@ ggplot(df, aes(x = eigen, y = gold)) +
   geom_point() +
   geom_smooth(method = "lm", se = FALSE)+
   theme_minimal()
+# Apparently, these two variables are positively correlated
 
 ggplot(df, aes(x = eigen, y = rgdp)) +
   geom_point() +
   geom_smooth(method = "lm", se = FALSE)+
   theme_minimal()
 
+# An important positive correlation can be seen between rgpd and eigen value centrality
+# We will confirm both of them with a correlation test
+
 cor.test(c_eigen, V(graph)$gold)
+# We get a correlation coefficient of 0.399 with a p-value of 0.006, so we can conclude that 
+# there is a positive  correlation between having a currency convertible in gold and having 
+# strong relations with strong countries.
+
 cor.test(c_eigen, V(graph)$rgdp)
+# Here we get a coefficient of 0.67 with a very low p value, thus confirming the correlation
+# between eigen vector centrality and rgpd.
+
+
+
+
 
 # Clean environment
 rm(list = ls())
