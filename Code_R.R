@@ -19,13 +19,26 @@ countries_infos <- unique(countries_infos)
 
 #We create a directed graph with our dataframe
 #Before that, we must divide weights based on the trade amount
-graph_data <- currencies_data[currencies_data$bitrade != 0 ,c("country_A","country_B","bitrade")]
+graph_data <- currencies_data[currencies_data$bitrade != 0 ,c("country_A","country_B","bitrade","colony")]
+
+#Finding if a country is a colonizer of other countries
+colonizer <- graph_data[,c("country_B","colony")]
+grouped_colonizer <- colonizer %>%
+  group_by(country_B) %>%
+  summarize(Sum_colony = sum(colony))
+grouped_colonizer$is_colonizer <- ifelse(grouped_colonizer$Sum_colony != 0 ,1 ,0)
+# Add the variable is_colonizer to countries_info
+countries_infos <- countries_infos %>%
+  left_join(grouped_colonizer[,c("country_B","is_colonizer")], by = c("country_A" = "country_B"))
+
+
 quantile(graph_data$bitrade)
 breakpoints <- c(-Inf, 12000, 51000, Inf)
 graph_data$category <- cut(graph_data$bitrade, breaks = breakpoints, labels = c("green", "blue", "red"))
 
 graph <- graph_from_data_frame(graph_data,directed = TRUE, vertices=countries_infos)
 E(graph)$weight <- graph_data$bitrade
+E(graph)$colony <- graph_data$colony
 graph$layout <- layout_nicely(graph)
 
 par(mfrow=c(1,1), mar=rep(0,4))
@@ -116,12 +129,42 @@ plot(graph,
      main = "Pagerank Centrality Visualization with rgdp"
      )
 
+#Degree centrality and being a colonizer
+c_degree <- degree(graph)
+
+df_degree <- data.frame(is_colonizer = V(graph)$is_colonizer,
+                 degree = c_degree)
+ggplot(df_degree, aes(x = degree, y = is_colonizer)) +
+  geom_point() +
+  geom_smooth(method = "lm", se = FALSE)+
+  theme_minimal()+
+  ggtitle("Degree Centrality vs. being a colonizer")
+
+# Apparently, colonizers have a high degree centrality
+# That was expected since a colonized country have many economic, financial, and political 
+# relations withthe colonizer, and so they would use the colonizer's currency for their trades,
+# especially since colonizer usually tend to export and import from the colony.
+
+
+
+
 #######################
 # Finding communities #
 #######################
+graph_net <- as.undirected(graph, mode = "mutual")
+graph_greedy <- cluster_fast_greedy(graph_net, weights = E(graph_net)$weight)
+graph_louvain <- cluster_louvain(graph_net, weights = E(graph_net)$weight)
+graph_leiden <- cluster_leiden(graph_net, objective_function = "modularity",weights = E(graph_net)$weight)
+graph_edgebetween <- cluster_infomap(graph,weights = E(graph)$weight)
 
-
-
+graph_modularity_res <- data.frame(Algorithm = "Shortest paths", Modularity = modularity(graph,graph_spectral),
+                                    Nb_clusters = max(graph_spectral))
+graph_modularity_res <- rbind(graph_modularity_res, c("Spectral", modularity(graph_net,graph_spectral), max(graph_spectral)))
+graph_modularity_res <- rbind(graph_modularity_res, c("Greedy", modularity(graph_greedy), max(graph_greedy$membership)))
+graph_modularity_res <- rbind(graph_modularity_res, c("Louvain", modularity(graph_louvain), max(graph_louvain$membership)))
+graph_modularity_res <- rbind(graph_modularity_res, c("Leiden", graph_leiden$quality, max(graph_leiden$membership)))
+graph_modularity_res <- rbind(graph_modularity_res, c("Edge betweenness", modularity(graph_edgebetween), max(graph_edgebetween$membership)))
+graph_modularity_res
 
 # Clean environment
 rm(list = ls())

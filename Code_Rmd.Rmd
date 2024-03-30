@@ -19,6 +19,10 @@ knitr::opts_chunk$set(echo = TRUE)
 
 *In this project, you will investigate a dyadic mechanism driving the formation of a real network. This mechanism can be related to assortativity or dissortativity on a node attribute (similar or dissimilar individuals tend to be connected), to the sociability or popularity of a node attribute (some individuals connect to more people or receive more connections), or to another network variable (individuals connected through another network tend to be connected). Please leave the instructions in italic. Attach your code as a RmD file.*
 
+## Introduction and data presentation
+
+#Insert intro and data presentation
+
 ## Data preparation
 
 ```{r}
@@ -44,12 +48,26 @@ countries_infos <- currencies_data[,c("country_A","gold","debtburden","rlong","r
 countries_infos <- unique(countries_infos)
 ```
 
-Then, we create a directed graph with our dataframe.
+Let's identify if the country is a colonizer or not
+
+```{r}
+#Finding if a country is a colonizer of other countries
+colonizer <- graph_data[,c("country_B","colony")]
+grouped_colonizer <- colonizer %>%
+  group_by(country_B) %>%
+  summarize(Sum_colony = sum(colony))
+grouped_colonizer$is_colonizer <- ifelse(grouped_colonizer$Sum_colony != 0 ,1 ,0)
+# Add the variable is_colonizer to countries_info
+countries_infos <- countries_infos %>%
+  left_join(grouped_colonizer[,c("country_B","is_colonizer")], by = c("country_A" = "country_B"))
+```
+
+Then, we will create a directed graph with our dataframe.
 
 We will also divide weights based on the trade amount, which will be used for our first plot.
 
 ```{r}
-graph_data <- currencies_data[currencies_data$bitrade != 0 ,c("country_A","country_B","bitrade")]
+graph_data <- currencies_data[currencies_data$bitrade != 0 ,c("country_A","country_B","bitrade","colony")]
 quantile(graph_data$bitrade)
 ```
 
@@ -67,6 +85,7 @@ graph_data$category <- cut(graph_data$bitrade, breaks = breakpoints, labels = c(
 
 graph <- graph_from_data_frame(graph_data,directed = TRUE, vertices=countries_infos)
 E(graph)$weight <- graph_data$bitrade
+E(graph)$colony <- graph_data$colony
 graph$layout <- layout_nicely(graph)
 ```
 
@@ -92,13 +111,15 @@ As we can see, the total trade is higher in the center of the graph (blue and re
 
 ## Centralities
 
-We want to measure how much the importance of a node in our graph depends on the importance of its neighbors. To do so, instead of using eigenvector centrality,since our graph is directed, we will use pagerank centrality
+### Pagerank centrality
+
+We want to measure how much the importance of a node in our graph depends on the importance of its neighbors. To do so, instead of using eigenvector centrality,since our graph is directed, we will use pagerank centrality.
 
 Let's compute it for all nodes, then we check its correlation with the two variables rgdp (log 1900 real gdp) and gold (1 if country_A has a currency convertible in gold in 1900 and 0 otherwise.)
 
 We expect there to be a correlation between rgdp and pagerank centrality: Indeed, economically stronger countries often have more resources to invest in infrastructure, technology and international relations, which can lead to greater connectivity and influence across the world. This may be due to their location and their influential system.
 
-Also, we expect pagerank centrality to be linked to convertability in gold. This is because in the 1900s, particularly during the late 19th and early 20th centuries, the gold standard was indeed a prevalent monetary system in manyparts of the world. So for trading purposes, talking in gold can be sometimes easier, to have a clearer vision on the value of the goods traded, and so trade negotiation could be more successful between gold convertible money countries.
+Also, we expect pagerank centrality to be linked to convertability in gold. This is because in the 1900s, particularly during the late 19th and early 20th centuries, the gold standard was indeed a prevalent monetary system in many parts of the world. So for trading purposes, talking in gold can be sometimes easier, to have a clearer vision on the value of the goods traded, and so trade negotiation could be more successful between gold convertible money countries.
 
 ```{r}
 c_page_rank <- page_rank(graph,directed = T, weights = E(graph)$weight)$vector
@@ -161,4 +182,45 @@ plot(graph,
      )
 ```
 
+### Degree centrality and being a colonizer
+
+Now we will see if being a colonizer is correlated with having high degree centrality.
+
+Degree centrality is defined by the number of neighbors of a node.
+
+```{r}
+c_degree <- degree(graph)
+
+df_degree <- data.frame(is_colonizer = V(graph)$is_colonizer,
+                 degree = c_degree)
+ggplot(df_degree, aes(x = degree, y = is_colonizer)) +
+  geom_point() +
+  geom_smooth(method = "lm", se = FALSE)+
+  theme_minimal()+
+  ggtitle("Degree Centrality vs. being a colonizer")
+```
+
+As we can see, colonizers have high degree centrality.
+
+That was expected since a colonized country have many economic, financial, and political relations with the colonizer, and so they would use the colonizer's currency for their trades, especially since colonizer usually tend to export and import a lot from and to the colony.
+
 ## Finding communities
+
+Being in the case of a directed graph, supposing also that a country with many trade edges has thus a powerful currency, and so powerful countries should attract a lot of less powerful countries to them. To find these clusters of powerful currency countries, countries with low money power and maybe a third class of in-between countries, we will use multiple clustering methods, and compare their results to choose the best number of communities.
+
+```{r}
+graph_net <- as.undirected(graph, mode = "mutual")
+graph_greedy <- cluster_fast_greedy(graph_net, weights = E(graph_net)$weight)
+graph_louvain <- cluster_louvain(graph_net, weights = E(graph_net)$weight)
+graph_leiden <- cluster_leiden(graph_net, objective_function = "modularity",weights = E(graph_net)$weight)
+graph_edgebetween <- cluster_infomap(graph,weights = E(graph)$weight)
+
+graph_modularity_res <- data.frame(Algorithm = "Shortest paths", Modularity = modularity(graph,graph_spectral),
+                                    Nb_clusters = max(graph_spectral))
+graph_modularity_res <- rbind(graph_modularity_res, c("Spectral", modularity(graph_net,graph_spectral), max(graph_spectral)))
+graph_modularity_res <- rbind(graph_modularity_res, c("Greedy", modularity(graph_greedy), max(graph_greedy$membership)))
+graph_modularity_res <- rbind(graph_modularity_res, c("Louvain", modularity(graph_louvain), max(graph_louvain$membership)))
+graph_modularity_res <- rbind(graph_modularity_res, c("Leiden", graph_leiden$quality, max(graph_leiden$membership)))
+graph_modularity_res <- rbind(graph_modularity_res, c("Edge betweenness", modularity(graph_edgebetween), max(graph_edgebetween$membership)))
+graph_modularity_res
+```
