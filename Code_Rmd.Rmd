@@ -19,7 +19,7 @@ knitr::opts_chunk$set(echo = TRUE)
 
 *In this project, you will investigate a dyadic mechanism driving the formation of a real network. This mechanism can be related to assortativity or dissortativity on a node attribute (similar or dissimilar individuals tend to be connected), to the sociability or popularity of a node attribute (some individuals connect to more people or receive more connections), or to another network variable (individuals connected through another network tend to be connected). Please leave the instructions in italic. Attach your code as a RmD file.*
 
-## Data importation and first plot
+## Data preparation
 
 ```{r}
 library(tidyverse)
@@ -70,7 +70,7 @@ E(graph)$weight <- graph_data$bitrade
 graph$layout <- layout_nicely(graph)
 ```
 
-Now we can do our first plot.
+### First plot
 
 ```{r}
 par(mfrow=c(1,1), mar=rep(0,4))
@@ -87,8 +87,6 @@ plot(
   edge.color = as.character(graph_data$category),
 )
 ```
-
-#### Comment
 
 As we can see, the total trade is higher in the center of the graph (blue and red edges), which shows that there is a group of central countries which have a big number of connections with a high trade value, while being the central home of the currency implied in the trade.
 
