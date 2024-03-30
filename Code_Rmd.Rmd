@@ -52,6 +52,7 @@ Let's identify if the country is a colonizer or not
 
 ```{r}
 #Finding if a country is a colonizer of other countries
+graph_data <- currencies_data[currencies_data$bitrade != 0 ,c("country_A","country_B","bitrade","colony")]
 colonizer <- graph_data[,c("country_B","colony")]
 grouped_colonizer <- colonizer %>%
   group_by(country_B) %>%
@@ -67,7 +68,6 @@ Then, we will create a directed graph with our dataframe.
 We will also divide weights based on the trade amount, which will be used for our first plot.
 
 ```{r}
-graph_data <- currencies_data[currencies_data$bitrade != 0 ,c("country_A","country_B","bitrade","colony")]
 quantile(graph_data$bitrade)
 ```
 
@@ -202,6 +202,8 @@ ggplot(df_degree, aes(x = degree, y = is_colonizer)) +
 As we can see, colonizers have high degree centrality.
 
 That was expected since a colonized country have many economic, financial, and political relations with the colonizer, and so they would use the colonizer's currency for their trades, especially since colonizer usually tend to export and import a lot from and to the colony.
+
+## CUG Test
 
 ## Finding communities
 
