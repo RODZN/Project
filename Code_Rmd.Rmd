@@ -51,6 +51,17 @@ We will also divide weights based on the trade amount, which will be used for ou
 ```{r}
 graph_data <- currencies_data[currencies_data$bitrade != 0 ,c("country_A","country_B","bitrade")]
 quantile(graph_data$bitrade)
+```
+
+Based on the quantiles, we divide into 3 categories:
+
+1.  Below 12000 USD
+
+2.  Between 12000 USD and 51000 USD
+
+3.  Greater than 51000 USD
+
+```{r}
 breakpoints <- c(-Inf, 12000, 51000, Inf)
 graph_data$category <- cut(graph_data$bitrade, breaks = breakpoints, labels = c("green", "blue", "red"))
 
