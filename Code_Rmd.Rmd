@@ -21,7 +21,11 @@ knitr::opts_chunk$set(echo = TRUE)
 
 ## Introduction and data presentation
 
+....
+
 #Insert intro and data presentation
+
+...
 
 ## Data preparation
 
@@ -340,6 +344,14 @@ We can conclude that the two indices are significantly lower (under the signific
 
 This also confirms the particular influence of real gdp in our network.
 
+## QAP Test
+
+....
+
+#Insert QAP test part
+
+....
+
 ## Finding communities
 
 Being in the case of a directed graph, supposing also that a country with many trade edges has thus a powerful currency, and so powerful countries should attract a lot of less powerful countries to them. We expect to find clusters of:
@@ -388,3 +400,9 @@ plot(graph,
      vertex.label.color=graph_spectral,
      edge.color = rgb(0,0,0,.25))
 ```
+
+We can see that those 3 clusters are mainly former by:
+
+1.   #Here detail the cluster's main countries
+
+2.  .....
