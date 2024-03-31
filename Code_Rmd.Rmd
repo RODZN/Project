@@ -252,9 +252,7 @@ erdosgraphs_is_colonizer <- lapply(erdosadjs, FUN = function(x){return(eiIndex(x
 erdosgraphs_gold <- lapply(erdosadjs, FUN = function(x){return(eiIndex(x,V(graph)$gold))})
 ```
 
-Let us now compare the distribution of the statistic under the Erdös-Renyi model to the original EI index.
-
-#### Gold variable
+Let us now compare the distribution of the statistic under the Erdös-Renyi model to the original EI index for the gold variable.
 
 ```{r}
 ggplot(data = data.frame(ei = unlist(erdosgraphs_gold))) +
@@ -273,6 +271,74 @@ geom_vline(aes(xintercept=is_colonizer_ei), color="red")+
 ggtitle("CUG test for the EI index for being a colonizer (reference model: Erdös-Renyi)")+
 theme_minimal()
 ```
+
+The empirical p-values for these CUG tests are
+
+```{r}
+erdos_ei_gold <- sum(unlist(erdosgraphs_gold) <= gold_ei)/1000
+erdos_ei_is_colonizer <- sum(unlist(erdosgraphs_is_colonizer) >= is_colonizer_ei)/1000
+erdos_ei_p
+```
+
+```{r}
+erdos_ei_is_colonizer
+```
+
+We can conclude that the two indices are significantly lower (under the significance threshold of 0.05) than what would be expected at random, under the Erdös-Renyi model.
+
+This confirms our previous hypotheses done with centralities analysis.
+
+### RGDP CUG Test
+
+Now, for the variable RGDP, which is continous, we will first create a new function for computing a similar index for a continous variable. Our approach calculates the pairwise differences between the attribute values ​​and then aggregate them based on the adjacency matrix.
+
+This function will then be applied to this variable's value within the graph, to then conduct a CUG test to identify its role.
+
+```{r}
+cIndex <- function(adj, attribute){
+  
+  diffs <- abs(outer(attribute, attribute, "-"))
+  #Note that we replace diagonal elements with 0s since we are interested in relationships between nodes
+  
+  diag(diffs) <- 0
+  #Next we normalize the differences by the range of the attribute values
+  
+  range_attr <- diff(range(attribute))
+  norm_diffs <- diffs / range_attr
+  
+  sum_diffs <- sum(adj * norm_diffs)
+  continuous_index <- sum_diffs / sum(adj)
+  
+  return(continuous_index)
+}
+```
+
+```{r}
+rgdp_c_index <- cIndex(graph_adj, V(graph)$rgdp)
+erdosgraphs_rgdp <- lapply(erdosadjs, FUN = function(x){return(cIndex(x,V(graph)$rgdp))})
+rgdp_c_index
+```
+
+Let us now compare the distribution of the statistic under the Erdös-Renyi model to the original EI index for the rgdp variable.
+
+```{r}
+ggplot(data = data.frame(ei = unlist(erdosgraphs_rgdp ))) +
+geom_histogram(aes(x=ei),binwidth = 0.005) +
+geom_vline(aes(xintercept=rgdp_c_index), color="red")+
+ggtitle("CUG test for the continous Index for real GDP (reference model: Erdös-Renyi)")+
+theme_minimal()
+```
+
+The corresponding p-values are
+
+```{r}
+erdos_cont_idx_rgdp <- sum(unlist(erdosgraphs_rgdp) >= rgdp_c_index)/1000
+erdos_cont_idx_rgdp
+```
+
+We can conclude that the two indices are significantly lower (under the significance threshold of 0.05) than what would be expected at random, under the Erdös-Renyi model.
+
+This also confirms the particular influence of real gdp in our network.
 
 ## Finding communities
 
