@@ -32,6 +32,7 @@ library(igraphdata)
 library(RColorBrewer)
 library(dplyr)
 library(ggplot2)
+library(sna)
 ```
 
 ```{r}
@@ -189,7 +190,7 @@ Now we will see if a colonizer node will have a high degree centrality.
 Degree centrality is defined by the number of neighbors of a node.
 
 ```{r}
-c_degree <- degree(graph)
+c_degree <- igraph::degree(graph, mode = "all")
 
 df_degree <- data.frame(is_colonizer = V(graph)$is_colonizer,
                  degree = c_degree)
@@ -203,7 +204,75 @@ As we can see, colonizers have high degree centrality.
 
 That was expected since a colonized country have many economic, financial, and political relations with the colonizer, and so they would use the colonizer's currency for their trades, especially since colonizer usually tend to export and import a lot from and to the colony.
 
-## CUG Test
+## Running a CUG Test
+
+In our study we want to investigate whether being a colonizer or the convertibility of gold into currencies for a country contribute to the emergence of exchanges between countries, making its currency used in another country's market. To analyze this, we use the Configurational Uniformity of Graphs (CUG) test, a method that aims to find evidence of specific mechanisms driving network formation. \
+\
+In our implementation, we will compare the observed network with a set of random networks generated under a null model. This comparison allows us to assess whether the properties of the observed network differ significantly from what would be expected by chance.
+
+Our test statistic is the difference between the metric calculated in the observed network and the mean of the metrics calculated in the random networks generated under the null model.To capture the impact of attributes such as gold convertibility and colonial status on trade creation, we use the EI index.
+
+The EI index quantifies the balance between positive and negative edges in a signed network.
+
+In our context, we will use the EI index to examine whether the presence of gold convertibility or colonial status leads to a particular pattern of positive or negative trade relations between countries. \
+\
+With this approach, we aim to assess the importance of gold convertibility and settler status in shaping the trade network and provide insights into the mechanisms that drive international trade relationships.
+
+```{r}
+eiIndex <- function(adj, attribute){
+same <- outer(attribute, attribute, "==")
+nInternal <- sum(adj * same)
+nExternal <- sum(adj) - nInternal
+ei <- (nExternal - nInternal) / sum(adj)
+return(ei)
+}
+```
+
+```{r}
+graph_adj <- as.matrix(as_adjacency_matrix(graph))
+is_colonizer_ei <- eiIndex(graph_adj,V(graph)$is_colonizer)
+is_colonizer_ei
+```
+
+```{r}
+gold_ei <- eiIndex(graph_adj,V(graph)$gold)
+gold_ei
+```
+
+The indexes are negative, indicating that more links are present between countries that are colonizers than the one that aren't, and also between countries with money convertability in gold rather than not.
+
+Let us now check if those indexes ae significantly different than the ones from random networks.
+
+### CUG Test
+
+```{r}
+erdosgraphs <- lapply(1:1000, sample_gnm, n= vcount(graph), m = ecount(graph))
+erdosadjs <- lapply(erdosgraphs, as_adjacency_matrix)
+erdosgraphs_is_colonizer <- lapply(erdosadjs, FUN = function(x){return(eiIndex(x,V(graph)$is_colonizer))})
+erdosgraphs_gold <- lapply(erdosadjs, FUN = function(x){return(eiIndex(x,V(graph)$gold))})
+```
+
+Let us now compare the distribution of the statistic under the Erdös-Renyi model to the original EI index.
+
+#### Gold variable
+
+```{r}
+ggplot(data = data.frame(ei = unlist(erdosgraphs_gold))) +
+geom_histogram(aes(x=ei),binwidth = 0.005) +
+geom_vline(aes(xintercept=gold_ei), color="red")+
+ggtitle("CUG test for the EI index for gold convertability (reference model: Erdös-Renyi)")+
+theme_minimal()
+```
+
+Then we do the same for the variable is_colonizer
+
+```{r}
+ggplot(data = data.frame(ei = unlist(erdosgraphs_is_colonizer))) +
+geom_histogram(aes(x=ei),binwidth = 0.005) +
+geom_vline(aes(xintercept=is_colonizer_ei), color="red")+
+ggtitle("CUG test for the EI index for being a colonizer (reference model: Erdös-Renyi)")+
+theme_minimal()
+```
 
 ## Finding communities
 
